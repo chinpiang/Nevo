@@ -104,6 +104,7 @@ pub struct Pool {
     pub collected: u128,
     pub is_closed: bool,
     pub state: PoolState,
+    pub application_deadline: u64,
 }
 
 /// Milestone for streaming disbursements
@@ -173,6 +174,7 @@ impl Contract {
         title: String,
         description: String,
         goal: u128,
+        application_deadline: u64,
     ) -> u32 {
         if description.len() as u32 > MAX_DESCRIPTION_LENGTH as u32 {
             panic!("Description exceeds maximum length");
@@ -208,6 +210,7 @@ impl Contract {
             collected: 0u128,
             is_closed: false,
             state: PoolState::Active,
+            application_deadline,
         };
 
         env.storage().persistent().set(&pool_id, &pool);
@@ -236,6 +239,7 @@ impl Contract {
         description: String,
         goal: u128,
         school: Address,
+        application_deadline: u64,
     ) -> u32 {
         creator.require_auth();
 
@@ -243,7 +247,7 @@ impl Contract {
             panic!("School is not registered");
         }
 
-        let pool_id = Self::create_pool(env.clone(), creator, title, description, goal);
+        let pool_id = Self::create_pool(env.clone(), creator, title, description, goal, application_deadline);
         let pool_school_key = (Symbol::new(&env, POOL_SCHOOL_PREFIX), pool_id);
         env.storage().persistent().set(&pool_school_key, &school);
         pool_id
@@ -283,6 +287,7 @@ impl Contract {
             collected: new_collected,
             is_closed: pool.is_closed,
             state: pool.state,
+            application_deadline: pool.application_deadline,
         };
         env.storage().persistent().set(&pool_id, &updated_pool);
 
@@ -324,7 +329,7 @@ impl Contract {
     }
 
     /// Get pool information as a tuple (id, creator, goal, collected, is_closed).
-    pub fn get_pool(env: Env, pool_id: u32) -> (u32, Address, u128, u128, bool) {
+    pub fn get_pool(env: Env, pool_id: u32) -> (u32, Address, u128, u128, bool, u64) {
         let pool: Pool = env
             .storage()
             .persistent()
@@ -337,6 +342,7 @@ impl Contract {
             pool.goal,
             pool.collected,
             pool.is_closed,
+            pool.application_deadline,
         )
     }
 
@@ -399,6 +405,7 @@ impl Contract {
             collected: pool.collected,
             is_closed: true,
             state: pool.state,
+            application_deadline: pool.application_deadline,
         };
 
         env.storage().persistent().set(&pool_id, &updated_pool);
@@ -1051,6 +1058,7 @@ impl Contract {
             collected: new_collected,
             is_closed: pool.is_closed,
             state: pool.state,
+            application_deadline: pool.application_deadline,
         };
         env.storage().persistent().set(&pool_id, &updated_pool);
 
