@@ -497,4 +497,8 @@ export async function fetchMyProfile(): Promise<UserProfile> {
       poolUpdates: false,
     },
   };
+export async function submitSignedXdr(
+  xdr: string
+): Promise<{ txHash: string }> {
+  return apiClient.post<{ txHash: string }>('/transactions/submit', { xdr });
 }
