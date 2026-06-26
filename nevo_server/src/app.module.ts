@@ -10,6 +10,7 @@ import { Donation } from './donations/donation.entity.js';
 import { DonationsModule } from './donations/donations.module.js';
 import { Pool } from './pools/pool.entity.js';
 import { PoolsModule } from './pools/pools.module.js';
+import { DonationsModule } from './donations/donations.module.js';
 import { SyncModule } from './sync/sync.module.js';
 import { User } from './users/user.entity.js';
 import { UsersModule } from './users/users.module.js';
