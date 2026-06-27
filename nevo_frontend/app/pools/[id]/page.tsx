@@ -13,7 +13,32 @@ import type { Pool } from '@/src/store/poolsStore';
 import { useWalletStore } from '@/src/store/walletStore';
 import { closePool, submitSignedXdr } from '@/lib/api-client';
 import { signTransaction } from '@stellar/freighter-api';
-import { toast } from '@/components/Toast';
+
+interface Contributor {
+  address: string;
+  amount: number;
+  donatedAt: string;
+}
+
+const MOCK_CONTRIBUTORS: Record<string, Contributor[]> = {
+  '1': [
+    {
+      address: 'GXYZ1234567890ABCDE1234567890ABCDE1234567890ABCDE1234567890AB',
+      amount: 500,
+      donatedAt: '2025-03-06',
+    },
+    {
+      address: 'GABC9876543210ZYXWV9876543210ZYXWV9876543210ZYXWV9876543210ZY',
+      amount: 1500,
+      donatedAt: '2025-03-07',
+    },
+    {
+      address: 'GHIJ7890123456KLMNO7890123456KLMNO7890123456KLMNO7890123456KL',
+      amount: 750,
+      donatedAt: '2025-03-08',
+    },
+  ],
+};
 
 // Testnet XLM native contract address (same as api-client)
 const TESTNET_XLM_CONTRACT =
@@ -97,6 +122,25 @@ export default function PoolDetailPage() {
   const [comments, setComments] = useState<Comment[]>([]);
   const [donateOpen, setDonateOpen] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
+  const [withdrawStep, setWithdrawStep] = useState<WithdrawStep>('idle');
+
+  const handleWithdraw = async () => {
+    // TODO: Implement withdrawal
+    toast('Withdrawal not implemented yet', 'info');
+  };
+
+  const withdrawLabel = () => {
+    switch (withdrawStep) {
+      case 'creating':
+        return 'Preparing...';
+      case 'signing':
+        return 'Signing...';
+      case 'submitting':
+        return 'Submitting...';
+      default:
+        return 'Withdraw Funds';
+    }
+  };
 
   const handleClosePool = async () => {
     if (!pool || !publicKey) return;
@@ -415,6 +459,7 @@ export default function PoolDetailPage() {
                 </div>
               </div>
             )}
+          </section>
           <section aria-labelledby="comments-heading">
             <h2 id="comments-heading" className="mb-4 text-lg font-semibold">
               Discussion
