@@ -5,7 +5,14 @@ import { useWalletStore } from '@/src/store/walletStore';
 import { Avatar } from '@/components/Avatar';
 import { Button } from '@/components/Button';
 import { WalletAddress } from '@/components/WalletAddress';
-import { fetchMyProfile, type ApiProfile } from '@/lib/api-client';
+import {
+  fetchMyProfile,
+  fetchMyDonations,
+  updateProfile,
+  type ApiProfile,
+  type ApiDonation,
+} from '@/lib/api-client';
+import { toast } from '@/components/Toast';
 
 interface UserPreferences {
   email: string;
@@ -37,9 +44,12 @@ export default function ProfilePage() {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    fetchMyProfile()
-      .then((data) => {
+    let active = true;
+    Promise.all([fetchMyProfile(), fetchMyDonations(5).catch(() => [])])
+      .then(([data, donations]) => {
+        if (!active) return;
         setProfile(data);
+        setRecentDonations(donations);
         setPreferences((p) => ({
           ...p,
           displayName:
@@ -50,9 +60,17 @@ export default function ProfilePage() {
         }));
         setIsLoading(false);
       })
-      .catch(() => {
-        setIsLoading(false);
+      .catch((err) => {
+        console.error('Failed to load profile:', err);
+      })
+      .finally(() => {
+        if (active) {
+          setIsLoading(false);
+        }
       });
+    return () => {
+      active = false;
+    };
   }, []);
 
   // Handle avatar upload
@@ -70,10 +88,18 @@ export default function ProfilePage() {
     }
   };
 
-  const handleSaveProfile = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSaveProfile = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    // TODO: Save to backend
-    setIsEditingProfile(false);
+    try {
+      const updated = await updateProfile(preferences.displayName);
+      setProfile(updated);
+      toast('Profile updated successfully');
+      setIsEditingProfile(false);
+    } catch (err) {
+      const msg =
+        err instanceof Error ? err.message : 'Failed to update profile';
+      toast(msg, 'error');
+    }
   };
 
   const toggleNotification = (key: keyof UserPreferences['notifications']) => {
@@ -327,49 +353,17 @@ export default function ProfilePage() {
               </a>
             </div>
             <div className="space-y-3">
-              {isLoading ? (
-                <div className="space-y-3">
-                  {[1, 2, 3].map((i) => (
-                    <div
-                      key={i}
-                      className="flex items-center gap-4 p-3 rounded-xl"
-                    >
-                      <div className="size-9 rounded-full bg-gray-200 dark:bg-gray-700 shrink-0 animate-pulse" />
-                      <div className="flex-1 space-y-2">
-                        <div className="flex items-center justify-between">
-                          <div className="h-4 w-24 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
-                          <div className="h-4 w-16 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
-                        </div>
-                        <div className="h-3 w-40 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
-                        <div className="h-3 w-12 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
-                      </div>
-                    </div>
-                  ))}
-                </div>
+              {recentDonations.length === 0 ? (
+                <p className="text-sm text-[var(--color-text-muted)]">
+                  No activity yet.
+                </p>
               ) : (
-                (
-                  [] as {
-                    id: string;
-                    type: string;
-                    amount: string;
-                    asset: string;
-                    recipient: string;
-                    date: string;
-                  }[]
-                ).map((tx) => (
+                recentDonations.map((tx) => (
                   <div
                     key={tx.id}
-                    className="flex items-center gap-4 p-3 rounded-xl hover:bg-[var(--color-surface-raised)] transition-colors"
+                    className="flex items-center gap-4 rounded-xl p-3 transition-colors hover:bg-[var(--color-surface-raised)]"
                   >
-                    <div
-                      className={`flex size-9 items-center justify-center rounded-full ${
-                        tx.type === 'donation'
-                          ? 'bg-brand-100 text-brand-600'
-                          : tx.type === 'pool_creation'
-                            ? 'bg-warning-light text-warning-dark'
-                            : 'bg-success-light text-success-dark'
-                      }`}
-                    >
+                    <div className="flex size-9 items-center justify-center rounded-full bg-brand-100 text-brand-600">
                       <svg
                         xmlns="http://www.w3.org/2000/svg"
                         fill="none"

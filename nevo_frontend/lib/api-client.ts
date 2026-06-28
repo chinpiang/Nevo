@@ -8,8 +8,10 @@ import {
   parseRetryAfterHeader,
   resolveRateLimitOptions,
 } from './rate-limit';
+import { getStoredAccessToken } from './jwt-storage';
+import { toast } from '../components/Toast';
 
-export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE';
+export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
 
 export interface RequestConfig extends Omit<RequestInit, 'method' | 'body'> {
   params?: Record<string, string | number | boolean | undefined>;
@@ -33,6 +35,13 @@ export class ApiError extends Error {
   ) {
     super(message);
     this.name = 'ApiError';
+  }
+}
+
+export class UnauthorizedError extends ApiError {
+  constructor(message: string, data?: unknown) {
+    super(401, message, data);
+    this.name = 'UnauthorizedError';
   }
 }
 
@@ -77,6 +86,29 @@ export class ApiClient {
     this.defaultTimeout = defaultTimeout;
     this.defaultRateLimit = resolveRateLimitOptions(rateLimit);
     this.rateLimiter = new ClientRateLimiter();
+    this.addRequestInterceptor((config) =>
+      this.attachAuthorizationHeader(config)
+    );
+  }
+
+  private attachAuthorizationHeader(
+    config: PreparedRequestConfig
+  ): PreparedRequestConfig {
+    if (config.requireAuth === false) {
+      return config;
+    }
+
+    const headers = new Headers(config.headers);
+    const accessToken = getStoredAccessToken();
+
+    if (accessToken) {
+      headers.set('Authorization', `Bearer ${accessToken}`);
+    }
+
+    return {
+      ...config,
+      headers,
+    };
   }
 
   private startRequest() {
@@ -367,6 +399,14 @@ export class ApiClient {
             } catch {
               errorData = await response.text();
             }
+            if (response.status >= 500 && response.status < 600) {
+              if (typeof window !== 'undefined') {
+                toast('Something went wrong. Please try again.', 'error');
+              }
+            }
+            if (response.status === 401) {
+              throw new UnauthorizedError(response.statusText, errorData);
+            }
             throw new ApiError(response.status, response.statusText, errorData);
           }
 
@@ -495,12 +535,22 @@ export interface ApiProfile {
   createdAt: string;
 }
 
-export function fetchMyDonations(): Promise<ApiDonation[]> {
-  return apiClient.get<ApiDonation[]>('/donations/me');
+export function fetchMyDonations(limit?: number): Promise<ApiDonation[]> {
+  return apiClient.get<ApiDonation[]>(
+    '/users/me/donations',
+    limit ? { params: { limit } } : undefined
+  );
 }
 
 export function fetchMyProfile(): Promise<ApiProfile> {
   return apiClient.get<ApiProfile>('/users/me');
+}
+
+export function updateProfile(displayName: string): Promise<ApiProfile> {
+  return apiClient.request<ApiProfile>('/users/me', 'PATCH', {
+    body: { displayName },
+    requireAuth: true,
+  });
 }
 
 export interface CreatePoolPayload {
@@ -521,39 +571,13 @@ export interface CreatePoolResponse {
 export async function createPool(
   payload: CreatePoolPayload
 ): Promise<CreatePoolResponse> {
-  return apiClient.post<CreatePoolResponse>('/pools', payload, {
-    requireAuth: true,
-  });
+  return apiClient.post<CreatePoolResponse>('/pools', payload);
 }
 
 export async function submitSignedXdr(
   xdr: string
 ): Promise<{ txHash: string }> {
   return apiClient.post<{ txHash: string }>('/transactions/submit', { xdr });
-}
-
-export interface ApiPool {
-  id: string;
-  contractPoolId: string;
-  title: string;
-  description: string;
-  goal: string;
-  raised: string;
-  status: string;
-}
-
-export async function fetchCreatorPools(publicKey: string): Promise<ApiPool[]> {
-  return apiClient.get<ApiPool[]>(
-    `/pools?creator=${encodeURIComponent(publicKey)}`
-  );
-}
-
-export async function donate(
-  poolId: number,
-  amount: string,
-  tokenAddress: string
-): Promise<void> {
-  return apiClient.post('/donations', { poolId, amount, tokenAddress });
 }
 
 export async function closePool(
@@ -566,4 +590,16 @@ export async function closePool(
       requireAuth: true,
     }
   );
+}
+
+export function verifyAuthSignature(
+  publicKey: string,
+  nonce: string,
+  signature: string
+): Promise<{ accessToken: string }> {
+  return apiClient.post<{ accessToken: string }>('/auth/verify', {
+    publicKey,
+    signature,
+    message: nonce,
+  });
 }
